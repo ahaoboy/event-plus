@@ -1,94 +1,97 @@
-//@ts-nocheck
-export type EventType = string | symbol;
+export type EventType = string | symbol | '*';
 
-// An event handler can take an optional event argument
-// and should not return a value
-export type Handler<T = any> = (event?: T) => void;
-export type WildcardHandler = (type: EventType, event?: any) => void;
+export type EventMap = Array<[EventType, any]>;
+export type GetKeyList<T extends EventMap> = T extends Array<infer E>
+  ? E extends [infer K, any]
+    ? K
+    : null
+  : null;
+export type GetValueList<T extends EventMap> = T extends Array<infer E>
+  ? E extends [any, infer V]
+    ? V
+    : null
+  : null;
+export type GetValueByKey<
+  T extends EventMap,
+  K extends EventType
+> = T extends Array<infer E>
+  ? E extends [K, infer R]
+    ? R
+    : undefined
+  : unknown;
 
-// An array of all currently registered event handlers for a type
-export type EventHandlerList = Array<Handler>;
-export type WildCardEventHandlerList = Array<WildcardHandler>;
+export type GetCbSet<T extends EventMap> = {
+  [K in GetKeyList<T>]: GetValueByKey<T, K>;
+};
 
-// A map of event types and their corresponding event handlers.
-export type EventHandlerMap = Map<
-  EventType,
-  EventHandlerList | WildCardEventHandlerList
->;
+const a: EventMap = [];
 
-export interface Emitter {
-  all: EventHandlerMap;
+export default class Emitter<T extends EventMap> {
+  // eventMap:EventMap
+  // cbSet: GetCbSet<T>
 
-  on<T = any>(type: EventType, handler: Handler<T>): void;
-  on(type: '*', handler: WildcardHandler): void;
+  cbMap = new Map();
+  constructor() {
+    // this.eventMap = initMap
+    // const keyList:GetKeyList<T> = Object.keys(initMap)
+    // this.cbSet = {}/
+  }
+  on<P extends GetKeyList<T>>(key: P, handler: GetValueByKey<T, P>): void {
+    const handlers = this.cbMap.get(key);
+    const added = handlers && handlers.push(handler);
+    if (!added) {
+      this.cbMap.set(key, [handler]);
+    }
+  }
 
-  off<T = any>(type: EventType, handler: Handler<T>): void;
-  off(type: '*', handler: WildcardHandler): void;
+  off<P extends GetKeyList<T>>(key: P, handler: GetValueByKey<T, P>): void {
+    const handlers = this.cbMap.get(key);
+    if (handlers) {
+      handlers.splice(handlers.indexOf(handler) >>> 0, 1);
+    }
+  }
 
-  emit<T = any>(type: EventType, event?: T): void;
-  emit(type: '*', event?: any): void;
+  emit<P extends GetKeyList<T>>(key: P, e: any) {
+    const list = this.cbMap.get(key);
+    list.forEach(handler => {
+      handler(e);
+    });
+    const allList = this.cbMap.get('*');
+    allList.forEach(handler => {
+      handler(key, e);
+    });
+  }
 }
 
-/**
- * Mitt: Tiny (~200b) functional event emitter / pubsub.
- * @name mitt
- * @returns {Mitt}
- */
-export default function mitt(all?: EventHandlerMap): Emitter {
-  all = all || new Map();
+const sss = Symbol('hello');
+// type m = [["string", [string]], ["number", [number]]];
+type m = [
+  ['string', (n: number) => number],
 
-  return {
-    /**
-     * A Map of event names to registered handler functions.
-     */
-    all,
+  ['number', (n: string) => string],
+  ['b', (n: string, s: boolean) => string],
+  [typeof sss, () => void]
+];
+const em = new Emitter<m>();
 
-    /**
-     * Register an event handler for the given type.
-     * @param {string|symbol} type Type of event to listen for, or `"*"` for all events
-     * @param {Function} handler Function to call in response to given event
-     * @memberOf mitt
-     */
-    on<T = any>(type: EventType, handler: Handler<T>) {
-      const handlers = all.get(type);
-      const added = handlers && handlers.push(handler);
-      if (!added) {
-        all.set(type, [handler]);
-      }
-    },
+type k = GetKeyList<m>;
+type v = GetValueByKey<m, 'string'>;
+type vv = GetValueByKey<m, typeof sss>;
 
-    /**
-     * Remove an event handler for the given type.
-     * @param {string|symbol} type Type of event to unregister `handler` from, or `"*"`
-     * @param {Function} handler Handler function to remove
-     * @memberOf mitt
-     */
-    off<T = any>(type: EventType, handler: Handler<T>) {
-      const handlers = all.get(type);
-      if (handlers) {
-        handlers.splice(handlers.indexOf(handler) >>> 0, 1);
-      }
-    },
+// em.on("string" as const, (n) => {
+//   console.log(n++);
+//   return n;
+// });
 
-    /**
-     * Invoke all handlers for the given type.
-     * If present, `"*"` handlers are invoked after type-matched handlers.
-     *
-     * Note: Manually firing "*" handlers is not supported.
-     *
-     * @param {string|symbol} type The event type to invoke
-     * @param {Any} [evt] Any value (object is recommended and powerful), passed to each handler
-     * @memberOf mitt
-     */
-    emit<T = any>(type: EventType, evt: T) {
-      ((all.get(type) || []) as EventHandlerList).slice().map(handler => {
-        handler(evt);
-      });
-      ((all.get('*') || []) as WildCardEventHandlerList)
-        .slice()
-        .map(handler => {
-          handler(type, evt);
-        });
-    },
-  };
-}
+em.on('string', n => {
+  console.log(n++);
+  return n;
+});
+em.on('b', n => {
+  console.log(n);
+  return n;
+});
+function on2<T extends EmitMap, P extends GetKey<T>>(
+  key: P,
+  cb: GetValue<T, P>
+) {}
